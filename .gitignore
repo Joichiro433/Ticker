@@ -6,6 +6,7 @@
 *.svg
 
 .env
+.nohup.txt
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
