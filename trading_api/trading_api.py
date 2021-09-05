@@ -8,10 +8,13 @@ import pandas as pd
 
 import pybotters
 from utils.utils import extract_dict
+from logger import Logger
 
 
 COLUMNS = ['timestamp', 'close', 'buy_size_1', 'buy_size_2', 'buy_price_1', 'buy_price_2', 'sell_size_1', 'sell_size_2', 'sell_price_1', 'sell_price_2']
+SAVE_DIR = 'orderbook'
 
+logger = Logger()
 
 class Ticker:
     def __init__(
@@ -106,14 +109,22 @@ class ApiClient:
                     ticker_ftx=ticker_ftx,
                     ticker_bitmex=ticker_bitmex)
 
-                print('####################')
-                print(self.df_bybit.tail(3))
-                print('-------------')
-                print(self.df_ftx.tail(3))
-                print('-------------')
-                print(self.df_bitmex.tail(3))
+                # logger.debug(self.df_bybit.tail(1))
+                # logger.debug(self.df_ftx.tail(1))
+                # logger.debug(self.df_bitmex.tail(1))
 
                 await asyncio.sleep(self._cal_delay())  # 取得するorderbookの更新
+
+    def save_ticker(self) -> None:
+        os.makedirs(SAVE_DIR, exist_ok=True)
+        self.df_bybit.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_bybit.pkl.bz2'), compression='bz2')
+        self.df_ftx.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_ftx.pkl.bz2'), compression='bz2')
+        self.df_bitmex.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_bitmex.pkl.bz2'), compression='bz2')
+        logger.info('save ticker info')
+        # df初期化
+        self.df_bybit : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
+        self.df_ftx : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
+        self.df_bitmex : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
 
     def _has_update(self) -> bool:
         update_flag_bybit : bool = all([len(self.store_bybit.orderbook), len(self.store_bybit.kline)])
@@ -156,25 +167,10 @@ class ApiClient:
             ticker_bybit: Ticker,
             ticker_ftx: Ticker,
             ticker_bitmex: Ticker) -> None:
-        if now == self.today:
-            # df更新
-            self.df_bybit = self.df_bybit.append(ticker_bybit.__dict__, ignore_index=True)
-            self.df_ftx = self.df_ftx.append(ticker_ftx.__dict__, ignore_index=True)
-            self.df_bitmex = self.df_bitmex.append(ticker_bitmex.__dict__, ignore_index=True)
-        elif now > self.today:
-            save_dir : str = 'orderbook'
-            os.makedirs(save_dir, exist_ok=True)
-            # df保存
-            self.df_bybit.to_pickle(os.path.join(save_dir, f'{self.today.strftime("%Y%m%d")}_bybit.pkl.bz2'), compression='bz2')
-            self.df_ftx.to_pickle(os.path.join(save_dir, f'{self.today.strftime("%Y%m%d")}_ftx.pkl.bz2'), compression='bz2')
-            self.df_bitmex.to_pickle(os.path.join(save_dir, f'{self.today.strftime("%Y%m%d")}_bitmex.pkl.bz2'), compression='bz2')
-            # df初期化
-            self.df_bybit : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
-            self.df_ftx : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
-            self.df_bitmex : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
-            # df更新
-            self.df_bybit = self.df_bybit.append(ticker_bybit.__dict__, ignore_index=True)
-            self.df_ftx = self.df_ftx.append(ticker_ftx.__dict__, ignore_index=True)
-            self.df_bitmex = self.df_bitmex.append(ticker_bitmex.__dict__, ignore_index=True)
-            # 日付更新
-            self.today = now
+        if now > self.today:  # 日付が変わった場合
+            self.save_ticker()  # dfの保存 & 初期化
+            self.today = now  # 日付更新
+        # df更新
+        self.df_bybit = self.df_bybit.append(ticker_bybit.__dict__, ignore_index=True)
+        self.df_ftx = self.df_ftx.append(ticker_ftx.__dict__, ignore_index=True)
+        self.df_bitmex = self.df_bitmex.append(ticker_bitmex.__dict__, ignore_index=True)
