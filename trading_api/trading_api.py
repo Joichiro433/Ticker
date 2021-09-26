@@ -109,9 +109,9 @@ class ApiClient:
                     ticker_ftx=ticker_ftx,
                     ticker_bitmex=ticker_bitmex)
 
-                # logger.debug(self.df_bybit.tail(1))
-                # logger.debug(self.df_ftx.tail(1))
-                # logger.debug(self.df_bitmex.tail(1))
+                logger.debug(self.df_bybit.tail(1))
+                logger.debug(self.df_ftx.tail(1))
+                logger.debug(self.df_bitmex.tail(1))
 
                 await asyncio.sleep(self._cal_delay())  # 取得するorderbookの更新
 
@@ -120,7 +120,7 @@ class ApiClient:
         self.df_bybit.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_bybit.pkl.bz2'), compression='bz2')
         self.df_ftx.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_ftx.pkl.bz2'), compression='bz2')
         self.df_bitmex.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_bitmex.pkl.bz2'), compression='bz2')
-        logger.info('save ticker info')
+        logger.info(f'Save ticker data. DATE: {self.today}.')
         # df初期化
         self.df_bybit : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
         self.df_ftx : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
