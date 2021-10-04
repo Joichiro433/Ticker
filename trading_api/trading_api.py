@@ -32,6 +32,23 @@ logger = Logger()
 
 
 class TradingHistoryStorage:
+    """確約履歴を保持するクラス
+
+    Attributes
+    ----------
+    bybits : List[float]
+        bybitの確約価格を保持するリスト
+    size_bybit : float
+        bybitの確約数（volume）を加算する
+    ftxs : List[float]
+        ftxの確約価格を保持するリスト
+    size_ftx : float
+        ftxの確約数（volume）を加算する
+    bitmexs : List[float]
+        bitmexの確約価格を保持するリスト
+    size_bitmex : float
+        bitmexの確約数（volume）を加算する
+    """
     def __init__(self) -> None:
         self.bybits : List[float] = []
         self.size_bybit : float = 0
@@ -42,6 +59,21 @@ class TradingHistoryStorage:
 
 
 class Ohlcv:
+    """ローソク足の情報をもつクラス
+
+    Attributes
+    ----------
+    open : float | None
+        始値
+    high : float | None
+        高値
+    low : float | None
+        安値
+    close : float | None
+        終値
+    volume : float
+        出来高
+    """
     def __init__(
             self, 
             open: Optional[float] = None, 
@@ -60,6 +92,37 @@ class Ohlcv:
 
 
 class Ticker:
+    """取引情報を保持するクラス。保存するdfの１レコードに相当
+
+    Attributes
+    ----------
+    open : float | None
+        始値
+    high : float | None
+        高値
+    low : float | None
+        安値
+    close : float | None
+        終値
+    volume : float
+        出来高
+    buy_size_1 : float
+        best BIDの厚さ
+    buy_size_2 : float
+        better BIDの厚さ
+    buy_price_1 : float
+        best BID
+    buy_price_2 : float
+        better BID
+    sell_size_1 : float
+        best ASKの厚さ
+    sell_size_2 : float
+        better ASKの厚さ
+    sell_price_1 : float
+        best ASK
+    sell_price_2 : float
+        better ASK
+    """
     def __init__(
             self,
             timestamp : datetime,
@@ -82,6 +145,34 @@ class Ticker:
 
 
 class ApiClient:
+    """取引所のAPIを使用するクラス
+    
+    Attributes
+    ----------
+    store_bybit : pybotters.BybitDataStore
+        bybitのDataStore
+    store_ftx : pybotters.FTXDataStore
+        ftxのDataStore
+    store_bitmex : pybotters.BitMEXDataStore
+        bitmexのDataStore
+    df_bybit : pd.DataFrame
+        bybitの取引情報を保存するdf
+    df_ftx : pd.DataFrame
+        ftxの取引情報を保存するdf
+    df_bitmex : pd.DataFrame
+        bitmexの取引情報を保存するdf
+    trading_history_storage : TradingHistoryStorage
+        各取引所の確約履歴を保持するインスタンス
+    warning_count : int
+        エラーが生じた際にインクレメント、5を超えるとプログラムを異常終了
+
+    Methods
+    -------
+    get_realtime_orderbook
+        リアルタイムに取引情報を保存する。確約履歴は5秒ごとにohlcvにまとめ、板情報とともにdfに保存
+    save_ticker -> None
+        dfを日が変わるごとにSAVE_DIRに書き出し、初期化する
+    """
     def __init__(self) -> None:
         self.store_bybit : pybotters.BybitDataStore = pybotters.BybitDataStore()
         self.store_ftx : pybotters.FTXDataStore = pybotters.FTXDataStore()
@@ -94,6 +185,7 @@ class ApiClient:
         self.warning_count : int = 0
 
     async def get_realtime_orderbook(self):
+        """リアルタイムに取引情報を保存する。確約履歴は5秒ごとにohlcvにまとめ、板情報とともにdfに保存"""
         async with pybotters.Client() as client:
             # bybit
             await client.ws_connect(
@@ -119,6 +211,7 @@ class ApiClient:
                 },
                 hdlr_json=self.store_bitmex.onmessage)
 
+            # 各取引所の情報が取得できるまで待機
             while not self._has_update():
                 await self.store_bybit.wait()
                 await self.store_ftx.wait()
@@ -164,9 +257,9 @@ class ApiClient:
                         ticker_ftx=ticker_ftx,
                         ticker_bitmex=ticker_bitmex)
 
-                    logger.debug(self.df_bybit.tail(1))
-                    logger.debug(self.df_ftx.tail(1))
-                    logger.debug(self.df_bitmex.tail(1))
+                    # logger.debug(self.df_bybit.tail(1))
+                    # logger.debug(self.df_ftx.tail(1))
+                    # logger.debug(self.df_bitmex.tail(1))
                     self.warning_count = 0
 
                     await asyncio.sleep(self._cal_delay())  # 取得するorderbookの更新
@@ -180,27 +273,35 @@ class ApiClient:
                     while datetime.now().second % 5 != 0:
                         await asyncio.sleep(0)
 
-
-
-    async def _store_bybit_trading_history(self) -> None:
+    async def _store_bybit_trading_history(self):
+        """bybitの確約履歴をリアルタイムに保存"""
         while True:
             self.trading_history_storage.bybits.append(self.store_bybit.trade.find()[-1]['price'])
             self.trading_history_storage.size_bybit += self.store_bybit.trade.find()[-1]['size']
             await self.store_bybit.wait()
 
-    async def _store_ftx_trading_history(self) -> None:
+    async def _store_ftx_trading_history(self):
+        """ftxの確約履歴をリアルタイムに保存"""
         while True:
             self.trading_history_storage.ftxs.append(self.store_ftx.trades.find()[-1]['price'])
             self.trading_history_storage.size_ftx += self.store_ftx.trades.find()[-1]['size']
             await self.store_ftx.wait()
 
-    async def _store_bitmex_trading_history(self) -> None:
+    async def _store_bitmex_trading_history(self):
+        """bitmexの確約履歴をリアルタイムに保存"""
         while True:
             self.trading_history_storage.bitmexs.append(self.store_bitmex.trade.find()[-1]['price'])
             self.trading_history_storage.size_bitmex += self.store_bitmex.trade.find()[-1]['size']
             await self.store_bitmex.wait()
 
     def _create_ohlcvs(self) -> Tuple[Ohlcv, Ohlcv, Ohlcv]:
+        """貯められた各取引所の約定履歴をohlcvに変換する。１件も無い場合はプロパティがNoneのohlcvを作成
+
+        Returns
+        -------
+        Tuple[Ohlcv, Ohlcv, Ohlcv]
+            bybit, ftx, bitmexのohlcv
+        """
         bybits : List[float] = self.trading_history_storage.bybits
         ftxs : List[float] = self.trading_history_storage.ftxs
         bitmexs : List[float] = self.trading_history_storage.bitmexs
@@ -238,6 +339,7 @@ class ApiClient:
         return ohlcv_bybit, ohlcv_ftx, ohlcv_bitmex
 
     def save_ticker(self) -> None:
+        """dfを日が変わるごとにSAVE_DIRに書き出し、初期化する"""
         os.makedirs(SAVE_DIR, exist_ok=True)
         self.df_bybit.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_bybit.pkl.bz2'), compression='bz2')
         self.df_ftx.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_ftx.pkl.bz2'), compression='bz2')
@@ -249,6 +351,13 @@ class ApiClient:
         self.df_bitmex : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
 
     def _has_update(self) -> bool:
+        """各取引所の情報が取得できたか
+
+        Returns
+        -------
+        bool
+            全ての取引所の情報が取得できた場合True
+        """
         update_flag_bybit : bool = all([len(self.store_bybit.orderbook), len(self.store_bybit.trade)])
         update_flag_ftx : bool = all([len(self.store_ftx.orderbook), len(self.store_ftx.trades)])
         update_flag_bitmex : bool = all([self.store_bitmex.orderbook, self.store_bitmex.trade])
@@ -257,6 +366,18 @@ class ApiClient:
     def _parse_orderbook(
             self, 
             orderbook: List[dict]) -> Dict[str, List[Dict[str, float]]]:
+        """APIで取得した板情報をパース
+
+        Parameters
+        ----------
+        orderbook : List[dict]
+            APIで取得した板情報
+
+        Returns
+        -------
+        Dict[str, List[Dict[str, float]]]
+            パース後の板情報
+        """
         result = {'Buy': [], 'Sell': []}
         wanted_keys = ['size', 'price']
         for dict_ in deepcopy(orderbook):
@@ -268,6 +389,13 @@ class ApiClient:
         return result
 
     def _cal_delay(self) -> float:
+        """待機時間を算出（5 - 処理時間）
+
+        Returns
+        -------
+        float
+            待機時間
+        """
         millisec : float = float('0.' + str(datetime.now()).split('.')[-1])
         return 5 - millisec
 
@@ -277,6 +405,19 @@ class ApiClient:
             ticker_bybit: Ticker,
             ticker_ftx: Ticker,
             ticker_bitmex: Ticker) -> None:
+        """dfにレコードを追加
+
+        Parameters
+        ----------
+        now : date
+            現在日
+        ticker_bybit : Ticker
+            bybitの取引情報
+        ticker_ftx : Ticker
+            ftxの取引情報
+        ticker_bitmex : Ticker
+            bitmexの取引情報
+        """
         if now > self.today:  # 日付が変わった場合
             self.save_ticker()  # dfの保存 & 初期化
             self.today = now  # 日付更新
