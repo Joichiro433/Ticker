@@ -1,32 +1,19 @@
 from typing import List, Dict, Optional, Tuple
 import os
+import json
 from datetime import date, datetime
 from copy import deepcopy
 import asyncio
 
 import pandas as pd
 import pybotters
+from google.cloud import storage
+from google.oauth2.service_account import Credentials
 
+import params
 from utils.utils import extract_dict
 from logger import Logger
 
-
-COLUMNS = [
-    'timestamp',
-    'open', 
-    'high', 
-    'low', 
-    'close', 
-    'volume', 
-    'buy_size_1', 
-    'buy_size_2', 
-    'buy_price_1', 
-    'buy_price_2', 
-    'sell_size_1', 
-    'sell_size_2', 
-    'sell_price_1', 
-    'sell_price_2']
-SAVE_DIR = 'trading_datas'
 
 logger = Logger()
 
@@ -177,12 +164,15 @@ class ApiClient:
         self.store_bybit : pybotters.BybitDataStore = pybotters.BybitDataStore()
         self.store_ftx : pybotters.FTXDataStore = pybotters.FTXDataStore()
         self.store_bitmex : pybotters.BitMEXDataStore = pybotters.BitMEXDataStore()
-        self.df_bybit : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
-        self.df_ftx : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
-        self.df_bitmex : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
+        self.df_bybit : pd.DataFrame = pd.DataFrame(columns=params.COLUMNS)
+        self.df_ftx : pd.DataFrame = pd.DataFrame(columns=params.COLUMNS)
+        self.df_bitmex : pd.DataFrame = pd.DataFrame(columns=params.COLUMNS)
         self.today : date = datetime.now().date()
         self.trading_history_storage : TradingHistoryStorage = TradingHistoryStorage()
         self.warning_count : int = 0
+        _cred : Credentials = Credentials.from_service_account_info(json.load(open(params.SECRET_KET_PATH)))
+        self.gcs_client : storage.Client = storage.Client(credentials=_cred, project=_cred.project_id)
+        self.gcs_bucket : storage.Bucket = self.gcs_client.get_bucket(params.BAKET_NAME)
 
     async def get_realtime_orderbook(self):
         """リアルタイムに取引情報を保存する。確約履歴は5秒ごとにohlcvにまとめ、板情報とともにdfに保存"""
@@ -257,12 +247,15 @@ class ApiClient:
                         ticker_ftx=ticker_ftx,
                         ticker_bitmex=ticker_bitmex)
 
-                    # logger.debug(self.df_bybit.tail(1))
-                    # logger.debug(self.df_ftx.tail(1))
-                    # logger.debug(self.df_bitmex.tail(1))
+                    logger.debug(self.df_bybit.tail(1))
+                    logger.debug(self.df_ftx.tail(1))
+                    logger.debug(self.df_bitmex.tail(1))
                     self.warning_count = 0
 
-                    await asyncio.sleep(self._cal_delay())  # 取得するorderbookの更新
+                    # キリの良い時間まで待機
+                    await asyncio.sleep(1)
+                    while datetime.now().second % 5 != 0:
+                        await asyncio.sleep(0)
 
                 except Exception as e:
                     logger.warn(e)
@@ -339,16 +332,25 @@ class ApiClient:
         return ohlcv_bybit, ohlcv_ftx, ohlcv_bitmex
 
     def save_ticker(self) -> None:
-        """dfを日が変わるごとにSAVE_DIRに書き出し、初期化する"""
-        os.makedirs(SAVE_DIR, exist_ok=True)
-        self.df_bybit.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_bybit.pkl.bz2'), compression='bz2')
-        self.df_ftx.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_ftx.pkl.bz2'), compression='bz2')
-        self.df_bitmex.to_pickle(os.path.join(SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_bitmex.pkl.bz2'), compression='bz2')
-        logger.info(f'Save ticker data. DATE: {self.today}.')
+        """dfを日が変わるごとにGCSに書き出し、初期化する"""
+
+        def inner_upload_df_to_gcs(df: pd.DataFrame, exchange: str) -> None:
+            temp_filepath : str = os.path.join(params.SAVE_DIR, f'temp_{exchange}.pkl.bz2')
+            df.to_pickle(temp_filepath, compression='bz2')  # ローカルにdfを一時書き出し
+            blob : storage.Blob = self.gcs_bucket.blob(os.path.join(params.SAVE_DIR, f'{self.today.strftime("%Y%m%d")}_{exchange}.pkl.bz2'))
+            blob.upload_from_filename(temp_filepath)  # GCSにdfをアップロード
+
+        inner_upload_df_to_gcs(df=self.df_bybit, exchange=params.BYBIT)
+        inner_upload_df_to_gcs(df=self.df_ftx, exchange=params.FTX)
+        inner_upload_df_to_gcs(df=self.df_bitmex, exchange=params.BITMEX)
+        logger.info(f'Uploaded ticker datas to GCS. DATE: {self.today}')
+        # GCSにlogアップロード
+        blob : storage.Blob = self.gcs_bucket.blob(logger.log_file_path)
+        blob.upload_from_filename(logger.log_file_path)
         # df初期化
-        self.df_bybit : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
-        self.df_ftx : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
-        self.df_bitmex : pd.DataFrame = pd.DataFrame(columns=COLUMNS)
+        self.df_bybit : pd.DataFrame = pd.DataFrame(columns=params.COLUMNS)
+        self.df_ftx : pd.DataFrame = pd.DataFrame(columns=params.COLUMNS)
+        self.df_bitmex : pd.DataFrame = pd.DataFrame(columns=params.COLUMNS)
 
     def _has_update(self) -> bool:
         """各取引所の情報が取得できたか
@@ -387,17 +389,6 @@ class ApiClient:
         result['Sell'].sort(key=lambda x: x['price'])
         result['Buy'].sort(key=lambda x: x['price'], reverse=True)
         return result
-
-    def _cal_delay(self) -> float:
-        """待機時間を算出（5 - 処理時間）
-
-        Returns
-        -------
-        float
-            待機時間
-        """
-        millisec : float = float('0.' + str(datetime.now()).split('.')[-1])
-        return 5 - millisec
 
     def _update_df(
             self,

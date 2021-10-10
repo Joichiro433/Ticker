@@ -1,6 +1,6 @@
 #!/bin/bash
 pip install -r requirements.txt
-conda install -cy conda-forge ta-lib
-conda install -cy conda-forge xgboost
-conda install -cy conda-forge lightgbm
-conda install -cy conda-forge catboost
+conda install -c conda-forge ta-lib -y
+conda install -c conda-forge xgboost -y
+conda install -c conda-forge lightgbm -y
+conda install -c conda-forge catboost -y

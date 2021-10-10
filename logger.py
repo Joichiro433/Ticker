@@ -10,16 +10,16 @@ import coloredlogs
 
 
 timestamp = datetime.strftime(datetime.now(), '%Y%m%d%H%M%S')
-log_file_name = f'ticker_{timestamp}.log'  # logファイルの名前
+LOG_FILE_NAME = f'ticker_{timestamp}.log'  # logファイルの名前
 
 class Logger:
-    def __init__(self, *, log_level=DEBUG, log_stdout=True):
-        self.log_folder_path = 'log'  # logフォルダのパス
+    def __init__(self, *, log_folder_path='log',log_level=DEBUG, log_stdout=True):
+        self.log_folder_path = log_folder_path  # logフォルダのパス
         self.log_backupcount = 2
 
         # logフォルダが無ければ作成
         os.makedirs(self.log_folder_path, exist_ok=True)
-        log_file_path = os.path.join(self.log_folder_path, log_file_name)
+        self.log_file_path = os.path.join(self.log_folder_path, LOG_FILE_NAME)
 
 
         coloredlogs.CAN_USE_BOLD_FONT = True
@@ -50,7 +50,7 @@ class Logger:
                                 datefmt="%Y/%m/%d %H:%M:%S")
 
         # サイズローテーション
-        handler = handlers.RotatingFileHandler(filename=log_file_path,
+        handler = handlers.RotatingFileHandler(filename=self.log_file_path,
                                                encoding='UTF-8',
                                                maxBytes=16777216,  # 2**24 (16MB)
                                                backupCount=self.log_backupcount)

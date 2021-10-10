@@ -8,6 +8,7 @@
 .env
 .nohup.txt
 debug*
+secret_key.json
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
