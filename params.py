@@ -25,4 +25,3 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 BYBIT = 'bybit'
 FTX = 'ftx'
 BITMEX = 'bitmex'
-EXCHANGES = [BYBIT, FTX, BITMEX]

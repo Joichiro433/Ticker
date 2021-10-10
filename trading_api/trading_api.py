@@ -247,9 +247,9 @@ class ApiClient:
                         ticker_ftx=ticker_ftx,
                         ticker_bitmex=ticker_bitmex)
 
-                    logger.debug(self.df_bybit.tail(1))
-                    logger.debug(self.df_ftx.tail(1))
-                    logger.debug(self.df_bitmex.tail(1))
+                    # logger.debug(self.df_bybit.tail(1))
+                    # logger.debug(self.df_ftx.tail(1))
+                    # logger.debug(self.df_bitmex.tail(1))
                     self.warning_count = 0
 
                     # キリの良い時間まで待機
