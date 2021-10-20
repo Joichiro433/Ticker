@@ -75,13 +75,13 @@ class Logger:
     def critical(self, msg):
         self.logger.critical(msg)
 
-    def remove_oldlog(self, *, max_log_num=10):
-        """
-        古いlogファイルを消去
+    def remove_oldlog(self, *, max_log_num=30):
+        """古いlogファイルを消去
+        
         Parameters
         ----------
         max_log_num : int, optional
-            logファイルの最大件数, by default 10
+            logファイルの最大件数, by default 30
         """
         logfile_name = os.path.join(self.log_folder_path, '*.log')
         logs = glob.glob(logfile_name)

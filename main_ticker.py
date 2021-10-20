@@ -1,9 +1,11 @@
 import asyncio
 
-from trading_api.trading_api import ApiClient
+# from trading_api.trading_api import ApiClient
+from debug_api import ApiClient
 from logger import Logger
 
 logger = Logger()
+logger.remove_oldlog()
 
 
 if __name__ == '__main__':
