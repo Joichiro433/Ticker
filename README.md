@@ -1,3 +1,5 @@
+
+
 # Trade情報収集App
 
 Trading botに使用できそうな特徴量を収集するアプリケーション。
@@ -15,6 +17,8 @@ pybotters: https://github.com/MtkN1/pybotters
 
 24時間稼働させるため、クラウド（AWSやGCPなど）のVM上での運用を推奨。
 
+GCPは新しいgoogleアカウントでは[90 日間 $300 相当の無料トライアル](https://cloud.google.com/free/docs/gcp-free-tier/?hl=ja)があるのおすすめ。
+
 ## Installation
 
 Trade情報収集Appを動作させる分には下記のrequirements.txtで十分である。
@@ -31,7 +35,7 @@ notebook内の機械学習ライブラリを使用するために、conda環境�
 
 なお、python version 3.9系で動作確認済みである。
 
-## Usage
+## Setup
 
 1. 収集したTrade情報をGCS (Google Cloud Storage) に保存しているため、GCPのアカウントが必要である。
 
@@ -39,13 +43,28 @@ notebook内の機械学習ライブラリを使用するために、conda環境�
 
    https://qiita.com/Brutus/items/22dfd31a681b67837a74
 
-2. GCSの設定を行い、サービスアカウントキー: jsonファイルを作成。
+2. 下記の記事を参考にGoogle Cloud Platformからサービスアカウントキー: jsonファイルを作成。
+
+   https://www.ipentec.com/document/software-google-cloud-platform-get-service-account-key
 
    作成したjsonファイルを `secret_key.json` にリネームして、`main_ticker.py` と同じ階層に配置する。
 
-   参考: https://qiita.com/komiya_____/items/e933bd9e0dcd9079cfbb
+3. Google Cloud PlatformからGCSのバケットを作成する。
 
-3. スクリプトファイル `run.sh` を実行することで、バックグラウンドでプログラムが動作する。
+   <img src='https://user-images.githubusercontent.com/64533928/141604686-ee339435-9c8d-4b35-ab48-e4246664bb03.png' width='620px'>
+
+4. 作成したバケットを選択し、「権限 > +追加」からプリンシパルを追加する。この際、
+
+   * 新しいプリンシパル: secret_key.jsonのclient_emailの値
+   * ロール: Storage レガシー バケット オーナー
+
+   とする。
+
+   <img src='https://user-images.githubusercontent.com/64533928/141604760-ca1c4545-829a-4667-b17b-5c33f4b0be6d.png' width='620px'>
+
+5. params.pyのBAKET_NAMEを作成したバケットの名前に変更する
+
+6. スクリプトファイル `run.sh` を実行することで、バックグラウンドでプログラムが動作する。
 
    ```sh
    ./run.sh
